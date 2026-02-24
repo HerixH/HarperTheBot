@@ -124,16 +124,26 @@ async def search_internet(query):
     """Searches the internet for general queries when keywords aren't met."""
     def _search():
         try:
+            from datetime import datetime
+            current_year = datetime.now().year
+            # Injected current year to ensure relevancy in 2026
+            refined_query = f"{query} {current_year}" if str(current_year) not in query else query
+            
             results = []
             with DDGS() as ddgs:
-                # Using region='wt-wt' for global/English results
-                for r in ddgs.text(query, region='wt-wt', max_results=3):
-                    # Basic cleaning to avoid overly long snippets
+                # Using region='wt-wt' and timelimit='m' (last month) for fresh 2026 data
+                for r in ddgs.text(refined_query, region='wt-wt', max_results=3, timelimit='m'):
                     title = r['title']
                     body = r['body']
                     if len(body) > 300:
                         body = body[:297] + "..."
                     results.append(f"🔹 *{title}*\n{body}\n")
+            
+            # If 'm' is too strict and returns nothing, try without timelimit but kept refined query
+            if not results:
+                for r in ddgs.text(refined_query, region='wt-wt', max_results=3):
+                    results.append(f"🔹 *{r['title']}*\n{r['body'][:297]}...\n")
+                    
             return results
         except Exception as e:
             logging.error(f"Internet search error internal: {e}")
@@ -144,7 +154,7 @@ async def search_internet(query):
         if not results:
             return None
         
-        return "🌐 *Harper Web Search:*\n\n" + "\n".join(results)
+        return "🌐 *Harper Web Search (Live 2026):*\n\n" + "\n".join(results)
     except Exception as e:
         logging.error(f"Internet search error: {e}")
         return None
