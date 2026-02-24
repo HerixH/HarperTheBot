@@ -12,6 +12,7 @@ from telegram.ext import (
     CallbackQueryHandler,
     filters
 )
+from duckduckgo_search import DDGS
 
 # Enable logging
 logging.basicConfig(
@@ -46,7 +47,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     inline_markup = InlineKeyboardMarkup(inline_keyboard)
 
     await update.message.reply_text(
-        f"🏆 *Welcome to Harper v3.2, {user.first_name}!*\n\n"
+        f"🏆 *Welcome to Harper v3.6, {user.first_name}!*\n\n"
         "Your **Blockchain Assistant** is ready. 🌐\n\n"
         "Buttons should now appear at the bottom of your screen. If not, tap the [::] icon in your chat bar!",
         reply_markup=markup,
@@ -64,18 +65,109 @@ async def blockchain_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await start(update, context)
 
 async def fetch_blockchain_news():
-    """Simulates or fetches real blockchain news."""
-    # In a production app, you'd use a News API key here.
-    # For now, I'll provide a high-quality curated feed.
-    news_items = [
-        {"t": "Bitcoin Hits New Milestone", "d": "BTC surges as institutional interest reaches an all-time high."},
-        {"t": "Ethereum 3.0 Proposals?", "d": "Developers discuss the next phase of scalability for the network."},
-        {"t": "Web3 Gaming Explosion", "d": "New AAA titles are integrating NFTs to empower player ownership."},
-        {"t": "DeFi Security Update", "d": "Major protocols implement new zero-knowledge proof verification."},
-        {"t": "Solana Speed Record", "d": "The network hits a new TPS record during a major stress test."}
-    ]
-    random.shuffle(news_items)
-    return news_items[:3]
+    """Fetches real blockchain news from CryptoCompare."""
+    try:
+        url = "https://min-api.cryptocompare.com/data/v2/news/?lang=EN"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, timeout=10.0)
+            data = response.json()
+            news_items = []
+            for item in data.get('Data', [])[:3]:
+                news_items.append({
+                    "t": item.get('title', 'No Title'),
+                    "d": item.get('body', 'No Description')[:200] + "..."
+                })
+            if not news_items:
+                raise Exception("Empty news data")
+            return news_items
+    except Exception as e:
+        logging.error(f"Error fetching news: {e}")
+        return [
+            {"t": "Bitcoin Stability", "d": "BTC remains strong as institutional interest grows in the current market cycle."},
+            {"t": "Ethereum Ecosystem", "d": "The Ethereum network continues to lead in decentralization and smart contract innovation."},
+            {"t": "Web3 Future", "d": "New developments in Web3 are bridging the gap between traditional tech and decentralized finance."}
+        ]
+
+async def fetch_crypto_prices():
+    """Fetches real market prices from CoinGecko."""
+    try:
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,binancecoin,ripple,cardano&vs_currencies=usd&include_24hr_change=true"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, timeout=10.0)
+            data = response.json()
+            
+            mapping = {
+                "bitcoin": ("BTC", "₿"),
+                "ethereum": ("ETH", "💎"),
+                "solana": ("SOL", "⚡"),
+                "binancecoin": ("BNB", "🔶"),
+                "ripple": ("XRP", "💧"),
+                "cardano": ("ADA", "🔵")
+            }
+            
+            prices_text = "💰 *Harper Market Hub (Live)*\n\n"
+            for coin_id, (symbol, emoji) in mapping.items():
+                if coin_id in data:
+                    price = data[coin_id]['usd']
+                    change = data[coin_id].get('usd_24h_change', 0)
+                    change_str = f"{change:+.2f}%"
+                    indicator = "📈" if change >= 0 else "📉"
+                    prices_text += f"{emoji} *{symbol}:* ${price:,.2f} ({change_str} {indicator})\n"
+            
+            prices_text += "\n_Source: CoinGecko Live-Feed_"
+            return prices_text
+    except Exception as e:
+        logging.error(f"Error fetching prices: {e}")
+        return "⚠️ *Error fetching live prices.*\n\nPlease try again later."
+
+async def search_internet(query):
+    """Searches the internet for general queries when keywords aren't met."""
+    def _search():
+        try:
+            results = []
+            with DDGS() as ddgs:
+                for r in ddgs.text(query, max_results=3):
+                    results.append(f"🔹 *{r['title']}*\n{r['body']}\n")
+            return results
+        except Exception as e:
+            logging.error(f"Internet search error internal: {e}")
+            return None
+
+    try:
+        results = await asyncio.to_thread(_search)
+        if not results:
+            return None
+        
+        return "🌐 *Harper Web Search:*\n\n" + "\n".join(results)
+    except Exception as e:
+        logging.error(f"Internet search error: {e}")
+        return None
+
+async def fetch_market_stats():
+    """Fetches global market stats and Fear & Greed index."""
+    try:
+        async with httpx.AsyncClient() as client:
+            # Global Stats
+            global_resp = await client.get("https://api.coingecko.com/api/v3/global", timeout=10.0)
+            global_data = global_resp.json().get('data', {})
+            
+            cap = global_data.get('total_market_cap', {}).get('usd', 0) / 1e12
+            btc_dom = global_data.get('market_cap_percentage', {}).get('btc', 0)
+            
+            # Fear & Greed
+            fng_resp = await client.get("https://api.alternative.me/fng/", timeout=10.0)
+            fng_data = fng_resp.json().get('data', [{}])[0]
+            fng_value = fng_data.get('value', '??')
+            fng_text = fng_data.get('value_classification', 'Unknown')
+            
+            return (f"📊 *Blockchain Market Sentiment*\n\n"
+                    f"• *Fear & Greed Index:* {fng_value} ({fng_text}) 🎭\n"
+                    f"• *BTC Dominance:* {btc_dom:.1f}%\n"
+                    f"• *Global Market Cap:* ${cap:.2f}T\n\n_"
+                    f"Data fetched live from Harper Network._")
+    except Exception as e:
+        logging.error(f"Error fetching stats: {e}")
+        return "⚠️ *Error fetching live market stats.*"
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles news and stats button clicks."""
@@ -94,14 +186,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh News", callback_data='news')], [InlineKeyboardButton("⬅️ Back", callback_data='back_to_start')]])
         )
     elif query.data == 'stats':
+        stats_text = await fetch_market_stats()
         await query.edit_message_text(
-            text="📊 *Blockchain Market Sentiment*\n\n"
-                 "• *Fear & Greed Index:* 72 (Greed) 🤑\n"
-                 "• *BTC Dominance:* 52.4%\n"
-                 "• *Global Market Cap:* $2.85T\n\n_"
-                 "Values updated live via Harper Network._",
+            text=stats_text,
             parse_mode='Markdown',
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data='back_to_start')]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh Stats", callback_data='stats')], [InlineKeyboardButton("⬅️ Back", callback_data='back_to_start')]])
         )
     elif query.data == 'surprise':
         await query.edit_message_text(text="🎯 Watch this! I'm sending a lucky dice in 3... 2... 1...")
@@ -127,12 +216,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles both menu buttons AND smart keyword detection (BTC, OpenClaw, etc.)."""
+    """Handles both menu buttons AND flexible keyword detection."""
     text = update.message.text
     text_lower = text.lower()
 
-    # 1. Handle Menu Buttons First
-    if text == '🔗 Blockchain News':
+    # 1. Flexible Keyword Matching (Handles both buttons and typing)
+    if any(k in text_lower for k in ["news", "blockchain", "headlines"]):
         news = await fetch_blockchain_news()
         await update.message.reply_text("🔎 Fetching the latest blocks...")
         await asyncio.sleep(1)
@@ -141,36 +230,58 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
             news_text += f"🔥 *{item['t']}*\n_{item['d']}_\n\n"
         await update.message.reply_text(news_text, parse_mode='Markdown')
 
-    elif text == '💰 Crypto Prices':
-        prices = "💰 *Top Asset Prices*\n\n" \
-                 "• *BTC:* $94,231.50 (+2.1%)\n" \
-                 "• *ETH:* $3,421.20 (-0.5%)\n" \
-                 "• *SOL:* $185.12 (+5.4%)\n" \
-                 "• *BNB:* $612.45 (+0.2%)\n\n" \
-                 "_Powered by Harper Live-Feed_"
+    elif any(k in text_lower for k in ["price", "crypto", "market", "ticker"]):
+        await update.message.reply_text("💹 Loading live market data...")
+        prices = await fetch_crypto_prices()
         await update.message.reply_text(prices, parse_mode='Markdown')
 
-    elif text == '🎮 Play Games':
+    elif any(k in text_lower for k in ["game", "play", "lucky", "dice"]):
         await update.message.reply_text("Feeling lucky? Choose your game:")
         await update.message.reply_dice(emoji="🎰")
     
-    elif text == '📊 Daily Poll':
+    elif any(k in text_lower for k in ["poll", "vote", "daily"]):
         questions = ["Which chain is better?", "HODL or Trade?", "Is Web3 the future?"]
         options = [["Solana", "Ethereum", "Bitcoin"], ["HODL 💎", "Trade 📉"], ["Yes! ✅", "Not sure 🧐"]]
         idx = random.randint(0, len(questions)-1)
         await context.bot.send_poll(update.effective_chat.id, questions[idx], options[idx], is_anonymous=False)
 
-    elif text == '👋 Say Hello':
+    elif any(k in text_lower for k in ["hello", "hi", "hey", "greet"]):
         await update.message.reply_text(f"Hello {update.effective_user.first_name}! Ready to explore the blockchain? 🚀")
 
-    # 2. Smart Keyword Detection & Personality
-    elif "who are you" in text_lower or "what is your name" in text_lower:
+    # 2. Personality & Knowledge Base (Enhanced)
+    elif "who are you" in text_lower or "your name" in text_lower:
         await update.message.reply_text("🤖 I am **Harper**, your premium AI assistant, running live on Railway! 🚀", parse_mode='Markdown')
 
-    elif "what is my name" in text_lower or "what's my name" in text_lower:
-        await update.message.reply_text(f"👤 Your name is **{update.effective_user.first_name}**! It's a pleasure to assist you.", parse_mode='Markdown')
+    # Knowledge Base Dictionary
+    knowledge = {
+        "vitalik": "💎 **Vitalik Buterin** is the co-founder of Ethereum. He's a visionary focused on blockchain scalability and decentralization.",
+        "satoshi": "🪙 **Satoshi Nakamoto** is the pseudonymous creator of Bitcoin. The whitepaper released in 2008 started the entire crypto revolution!",
+        "herix": "👨‍💻 **Herix** is the main developer and architect of Harper Bot. He's dedicated to building specialized AI tools for the Web3 community.",
+        "solana": "⚡ **Solana (SOL)** is a high-speed, high-performance blockchain known for its fast transactions and low costs.",
+        "ethereum": "🌐 **Ethereum (ETH)** is the world's leading smart-contract platform, powering DeFi, NFTs, and decentralized apps.",
+        "bitcoin": "🥇 **Bitcoin (BTC)** is the first and most secure cryptocurrency, often regarded as 'Digital Gold'.",
+        "harper": "🤖 That's me! I'm **Harper**, your AI Blockchain Assistant. I'm here to help you navigate the world of decentralized finance!",
+    }
 
-    elif "openclaw" in text_lower:
+    # Custom Name Setting
+    if "my name is " in text_lower:
+        new_name = text.split("is", 1)[1].strip()
+        context.user_data['custom_name'] = new_name
+        await update.message.reply_text(f"� Nice to meet you, **{new_name}**! I'll remember that. Ask me 'What's my name' anytime!", parse_mode='Markdown')
+        return
+
+    # Check for User Name or Knowledge Matches
+    if "what is my name" in text_lower or "what's my name" in text_lower:
+        saved_name = context.user_data.get('custom_name', update.effective_user.first_name)
+        await update.message.reply_text(f"👤 Your name is **{saved_name}**! It's a pleasure to assist you.", parse_mode='Markdown')
+        return
+
+    for key, info in knowledge.items():
+        if key in text_lower:
+            await update.message.reply_text(f"📚 *Harper Knowledge:* \n\n{info}", parse_mode='Markdown')
+            return
+
+    if "opencl" in text_lower:
         await update.message.reply_text(
             "🦞 *OpenClaw Features*\n\n"
             "OpenClaw is an advanced automation framework. Features include:\n"
@@ -179,9 +290,6 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• **Data Extraction:** Structured APIs from any site.\n",
             parse_mode='Markdown'
         )
-
-    elif "btc" in text_lower or "bitcoin" in text_lower:
-        await update.message.reply_text("🚀 *BTC Update:* Bitcoin is looking strong! Type '💰 Crypto Prices' for live data.", parse_mode='Markdown')
 
     elif "time" in text_lower:
         from datetime import datetime
@@ -192,13 +300,19 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         jokes = ["Why did the crypto trader cross the road? To get to the other side of the pump!", "Blockchain is like a relationship: once it's committed, you can't change the history."]
         await update.message.reply_text(random.choice(jokes))
 
-    # 3. Default Fallback
+    # 3. Internet Search Fallback
     else:
-        await update.message.reply_text(
-            f"🎯 *Message Received!*\n\nI'm not exactly sure how to handle a request for _{update.message.text}_ yet, but I'm learning! \n\n"
-            "Use the **Interactive Menu** at the bottom to explore my features! ↓",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_chat_action("typing")
+        search_results = await search_internet(text)
+        
+        if search_results:
+            await update.message.reply_text(search_results, parse_mode='Markdown')
+        else:
+            await update.message.reply_text(
+                f"🎯 *Message Received! (Harper v3.7)*\n\nI couldn't find specific live data for _{text}_ right now. \n\n"
+                "Try asking about **prices**, **news**, or specific crypto like **Solana**!",
+                parse_mode='Markdown'
+            )
 
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Greets new members when they join a group."""
@@ -226,5 +340,6 @@ if __name__ == '__main__':
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_replies))
     
-    print("Harper v3.0 is live with Blockchain features!")
+    print("Harper v3.6 is live with Personalized Features & Knowledge Base!")
     application.run_polling()
+
