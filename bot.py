@@ -126,8 +126,14 @@ async def search_internet(query):
         try:
             results = []
             with DDGS() as ddgs:
-                for r in ddgs.text(query, max_results=3):
-                    results.append(f"🔹 *{r['title']}*\n{r['body']}\n")
+                # Using region='wt-wt' for global/English results
+                for r in ddgs.text(query, region='wt-wt', max_results=3):
+                    # Basic cleaning to avoid overly long snippets
+                    title = r['title']
+                    body = r['body']
+                    if len(body) > 300:
+                        body = body[:297] + "..."
+                    results.append(f"🔹 *{title}*\n{body}\n")
             return results
         except Exception as e:
             logging.error(f"Internet search error internal: {e}")
@@ -220,8 +226,10 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     text_lower = text.lower()
 
+    import re
+
     # 1. Flexible Keyword Matching (Handles both buttons and typing)
-    if any(k in text_lower for k in ["news", "blockchain", "headlines"]):
+    if any(re.search(rf"\b{k}\b", text_lower) for k in ["news", "blockchain", "headlines"]):
         news = await fetch_blockchain_news()
         await update.message.reply_text("🔎 Fetching the latest blocks...")
         await asyncio.sleep(1)
@@ -230,22 +238,22 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
             news_text += f"🔥 *{item['t']}*\n_{item['d']}_\n\n"
         await update.message.reply_text(news_text, parse_mode='Markdown')
 
-    elif any(k in text_lower for k in ["price", "crypto", "market", "ticker"]):
+    elif any(re.search(rf"\b{k}\b", text_lower) for k in ["price", "crypto", "market", "ticker"]):
         await update.message.reply_text("💹 Loading live market data...")
         prices = await fetch_crypto_prices()
         await update.message.reply_text(prices, parse_mode='Markdown')
 
-    elif any(k in text_lower for k in ["game", "play", "lucky", "dice"]):
+    elif any(re.search(rf"\b{k}\b", text_lower) for k in ["game", "play", "lucky", "dice"]):
         await update.message.reply_text("Feeling lucky? Choose your game:")
         await update.message.reply_dice(emoji="🎰")
     
-    elif any(k in text_lower for k in ["poll", "vote", "daily"]):
+    elif any(re.search(rf"\b{k}\b", text_lower) for k in ["poll", "vote", "daily"]):
         questions = ["Which chain is better?", "HODL or Trade?", "Is Web3 the future?"]
         options = [["Solana", "Ethereum", "Bitcoin"], ["HODL 💎", "Trade 📉"], ["Yes! ✅", "Not sure 🧐"]]
         idx = random.randint(0, len(questions)-1)
         await context.bot.send_poll(update.effective_chat.id, questions[idx], options[idx], is_anonymous=False)
 
-    elif any(k in text_lower for k in ["hello", "hi", "hey", "greet"]):
+    elif any(re.search(rf"\b{k}\b", text_lower) for k in ["hello", "hi", "hey", "greet"]):
         await update.message.reply_text(f"Hello {update.effective_user.first_name}! Ready to explore the blockchain? 🚀")
 
     # 2. Personality & Knowledge Base (Enhanced)
