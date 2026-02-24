@@ -233,44 +233,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles both menu buttons AND flexible keyword detection."""
+    import re
     text = update.message.text
     text_lower = text.lower()
 
-    import re
+    def has_word(word):
+        return bool(re.search(rf"\b{re.escape(word)}\b", text_lower))
 
-    # 1. Flexible Keyword Matching (Handles both buttons and typing)
-    if any(re.search(rf"\b{k}\b", text_lower) for k in ["news", "blockchain", "headlines"]):
-        news = await fetch_blockchain_news()
-        await update.message.reply_text("🔎 Fetching the latest blocks...")
-        await asyncio.sleep(1)
-        news_text = "🗞 *Harper Blockchain Feed*\n\n"
-        for item in news:
-            news_text += f"🔥 *{item['t']}*\n_{item['d']}_\n\n"
-        await update.message.reply_text(news_text, parse_mode='Markdown')
-
-    elif any(re.search(rf"\b{k}\b", text_lower) for k in ["price", "crypto", "market", "ticker"]):
-        await update.message.reply_text("💹 Loading live market data...")
-        prices = await fetch_crypto_prices()
-        await update.message.reply_text(prices, parse_mode='Markdown')
-
-    elif any(re.search(rf"\b{k}\b", text_lower) for k in ["game", "play", "lucky", "dice"]):
-        await update.message.reply_text("Feeling lucky? Choose your game:")
-        await update.message.reply_dice(emoji="🎰")
-    
-    elif any(re.search(rf"\b{k}\b", text_lower) for k in ["poll", "vote", "daily"]):
-        questions = ["Which chain is better?", "HODL or Trade?", "Is Web3 the future?"]
-        options = [["Solana", "Ethereum", "Bitcoin"], ["HODL 💎", "Trade 📉"], ["Yes! ✅", "Not sure 🧐"]]
-        idx = random.randint(0, len(questions)-1)
-        await context.bot.send_poll(update.effective_chat.id, questions[idx], options[idx], is_anonymous=False)
-
-    elif any(re.search(rf"\b{k}\b", text_lower) for k in ["hello", "hi", "hey", "greet"]):
-        await update.message.reply_text(f"Hello {update.effective_user.first_name}! Ready to explore the blockchain? 🚀")
-
-    # 2. Personality & Knowledge Base (Enhanced)
-    elif "who are you" in text_lower or "your name" in text_lower:
-        await update.message.reply_text("🤖 I am **Harper**, your premium AI assistant, running live on Railway! 🚀", parse_mode='Markdown')
-
-    # Knowledge Base Dictionary
+    # --- Knowledge Base ---
     knowledge = {
         "vitalik": "💎 **Vitalik Buterin** is the co-founder of Ethereum. He's a visionary focused on blockchain scalability and decentralization.",
         "satoshi": "🪙 **Satoshi Nakamoto** is the pseudonymous creator of Bitcoin. The whitepaper released in 2008 started the entire crypto revolution!",
@@ -281,25 +251,57 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "harper": "🤖 That's me! I'm **Harper**, your AI Blockchain Assistant. I'm here to help you navigate the world of decentralized finance!",
     }
 
-    # Custom Name Setting
+    # --- Single unified if/elif/else chain ---
+
     if "my name is " in text_lower:
         new_name = text.split("is", 1)[1].strip()
         context.user_data['custom_name'] = new_name
-        await update.message.reply_text(f"� Nice to meet you, **{new_name}**! I'll remember that. Ask me 'What's my name' anytime!", parse_mode='Markdown')
-        return
+        await update.message.reply_text(f"👋 Nice to meet you, **{new_name}**! I'll remember that. Ask me 'What's my name' anytime!", parse_mode='Markdown')
 
-    # Check for User Name or Knowledge Matches
-    if "what is my name" in text_lower or "what's my name" in text_lower:
+    elif "what is my name" in text_lower or "what's my name" in text_lower:
         saved_name = context.user_data.get('custom_name', update.effective_user.first_name)
         await update.message.reply_text(f"👤 Your name is **{saved_name}**! It's a pleasure to assist you.", parse_mode='Markdown')
-        return
 
-    for key, info in knowledge.items():
-        if key in text_lower:
-            await update.message.reply_text(f"📚 *Harper Knowledge:* \n\n{info}", parse_mode='Markdown')
-            return
+    elif "who are you" in text_lower or "your name" in text_lower:
+        await update.message.reply_text("🤖 I am **Harper**, your premium AI assistant, running live on Railway! 🚀", parse_mode='Markdown')
 
-    if "opencl" in text_lower:
+    elif any(has_word(k) for k in ["news", "blockchain", "headlines"]):
+        news = await fetch_blockchain_news()
+        await update.message.reply_text("🔎 Fetching the latest blocks...")
+        await asyncio.sleep(1)
+        news_text = "🗞 *Harper Blockchain Feed*\n\n"
+        for item in news:
+            news_text += f"🔥 *{item['t']}*\n_{item['d']}_\n\n"
+        await update.message.reply_text(news_text, parse_mode='Markdown')
+
+    elif any(has_word(k) for k in ["price", "crypto", "market", "ticker"]):
+        await update.message.reply_text("💹 Loading live market data...")
+        prices = await fetch_crypto_prices()
+        await update.message.reply_text(prices, parse_mode='Markdown')
+
+    elif any(has_word(k) for k in ["game", "play", "lucky", "dice"]):
+        await update.message.reply_text("Feeling lucky? Choose your game:")
+        await update.message.reply_dice(emoji="🎰")
+
+    elif any(has_word(k) for k in ["poll", "vote", "daily"]):
+        questions = ["Which chain is better?", "HODL or Trade?", "Is Web3 the future?"]
+        options = [["Solana", "Ethereum", "Bitcoin"], ["HODL 💎", "Trade 📉"], ["Yes! ✅", "Not sure 🧐"]]
+        idx = random.randint(0, len(questions)-1)
+        await context.bot.send_poll(update.effective_chat.id, questions[idx], options[idx], is_anonymous=False)
+
+    elif any(has_word(k) for k in ["hello", "hi", "hey", "greet"]):
+        await update.message.reply_text(f"Hello {update.effective_user.first_name}! Ready to explore the blockchain? 🚀")
+
+    elif any(has_word(k) for k in ["joke"]):
+        jokes = ["Why did the crypto trader cross the road? To get to the other side of the pump!", "Blockchain is like a relationship: once it's committed, you can't change the history."]
+        await update.message.reply_text(random.choice(jokes))
+
+    elif has_word("time"):
+        from datetime import datetime
+        now = datetime.now().strftime("%H:%M:%S")
+        await update.message.reply_text(f"🕒 The current server time is: **{now}**", parse_mode='Markdown')
+
+    elif has_word("opencl"):
         await update.message.reply_text(
             "🦞 *OpenClaw Features*\n\n"
             "OpenClaw is an advanced automation framework. Features include:\n"
@@ -309,25 +311,22 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
 
-    elif "time" in text_lower:
-        from datetime import datetime
-        now = datetime.now().strftime("%H:%M:%S")
-        await update.message.reply_text(f"🕒 The current server time is: **{now}**", parse_mode='Markdown')
+    elif any(key in text_lower for key in knowledge):
+        for key, info in knowledge.items():
+            if key in text_lower:
+                await update.message.reply_text(f"📚 *Harper Knowledge:* \n\n{info}", parse_mode='Markdown')
+                break
 
-    elif "joke" in text_lower:
-        jokes = ["Why did the crypto trader cross the road? To get to the other side of the pump!", "Blockchain is like a relationship: once it's committed, you can't change the history."]
-        await update.message.reply_text(random.choice(jokes))
-
-    # 3. Internet Search Fallback
     else:
+        # Internet search fallback — only runs when nothing else matched
         await update.message.reply_chat_action("typing")
         search_results = await search_internet(text)
-        
+
         if search_results:
             await update.message.reply_text(search_results, parse_mode='Markdown')
         else:
             await update.message.reply_text(
-                f"🎯 *Message Received! (Harper v3.7)*\n\nI couldn't find specific live data for _{text}_ right now. \n\n"
+                f"🎯 *Harper v3.7*\n\nI couldn't find info on _{text}_ right now.\n\n"
                 "Try asking about **prices**, **news**, or specific crypto like **Solana**!",
                 parse_mode='Markdown'
             )
