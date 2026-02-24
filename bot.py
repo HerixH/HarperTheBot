@@ -126,24 +126,27 @@ async def search_internet(query):
         try:
             from datetime import datetime
             current_year = datetime.now().year
-            # Injected current year to ensure relevancy in 2026
+            # Append current year for relevancy
             refined_query = f"{query} {current_year}" if str(current_year) not in query else query
-            
+            # Force English results with english-only language filter
+            refined_query = refined_query + " site:en"
+
             results = []
             with DDGS() as ddgs:
-                # Using region='wt-wt' and timelimit='m' (last month) for fresh 2026 data
-                for r in ddgs.text(refined_query, region='wt-wt', max_results=3, timelimit='m'):
+                # region='en-us' enforces English-language results
+                for r in ddgs.text(refined_query, region='en-us', max_results=3, timelimit='m'):
                     title = r['title']
                     body = r['body']
                     if len(body) > 300:
                         body = body[:297] + "..."
                     results.append(f"🔹 *{title}*\n{body}\n")
-            
-            # If 'm' is too strict and returns nothing, try without timelimit but kept refined query
+
+            # Fallback: no timelimit, but still English
             if not results:
-                for r in ddgs.text(refined_query, region='wt-wt', max_results=3):
-                    results.append(f"🔹 *{r['title']}*\n{r['body'][:297]}...\n")
-                    
+                for r in ddgs.text(query + f" {current_year}", region='en-us', max_results=3):
+                    body = r['body'][:297] + "..."
+                    results.append(f"🔹 *{r['title']}*\n{body}\n")
+
             return results
         except Exception as e:
             logging.error(f"Internet search error internal: {e}")
@@ -153,7 +156,7 @@ async def search_internet(query):
         results = await asyncio.to_thread(_search)
         if not results:
             return None
-        
+
         return "🌐 *Harper Web Search (Live 2026):*\n\n" + "\n".join(results)
     except Exception as e:
         logging.error(f"Internet search error: {e}")
@@ -289,8 +292,16 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         idx = random.randint(0, len(questions)-1)
         await context.bot.send_poll(update.effective_chat.id, questions[idx], options[idx], is_anonymous=False)
 
-    elif any(has_word(k) for k in ["hello", "hi", "hey", "greet"]):
+    elif any(has_word(k) for k in ["hello", "hi", "hey", "greet", "sup", "yo"]):
         await update.message.reply_text(f"Hello {update.effective_user.first_name}! Ready to explore the blockchain? 🚀")
+
+    elif any(has_word(k) for k in ["yes", "yeah", "yep", "sure", "ok", "okay", "alright", "yup", "nope", "no", "nah", "thanks", "thank", "cool", "great", "nice"]):
+        responses = [
+            f"Got it, {update.effective_user.first_name}! 😊 What would you like to explore? Try **news**, **prices**, or ask me anything!",
+            f"Awesome! 🚀 Use the menu below or type **'prices'** to see live crypto rates!",
+            f"Roger that! 👍 What's on your mind? Try asking about **Bitcoin**, **Ethereum**, or **news**!",
+        ]
+        await update.message.reply_text(random.choice(responses), parse_mode='Markdown')
 
     elif any(has_word(k) for k in ["joke"]):
         jokes = ["Why did the crypto trader cross the road? To get to the other side of the pump!", "Blockchain is like a relationship: once it's committed, you can't change the history."]
@@ -318,6 +329,14 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 break
 
     else:
+        # Only do internet search for meaningful queries (length > 3 chars)
+        if len(text.strip()) <= 3:
+            await update.message.reply_text(
+                f"🤖 Not sure what you mean by *{text}*! Try saying **'prices'**, **'news'**, or ask me anything about crypto!",
+                parse_mode='Markdown'
+            )
+            return
+
         # Internet search fallback — only runs when nothing else matched
         await update.message.reply_chat_action("typing")
         search_results = await search_internet(text)
