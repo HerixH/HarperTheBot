@@ -20,6 +20,10 @@ logging.basicConfig(
     level=logging.INFO
 )
 
+def get_user_display_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    custom = context.user_data.get("custom_name")
+    return custom if custom else update.effective_user.first_name
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sends a greeting with the highly visible Blockchain menu."""
     user = update.effective_user
@@ -239,6 +243,8 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
     import re
     text = update.message.text
     text_lower = text.lower().strip()
+    user_name = get_user_display_name(update, context)
+    last_topic = context.user_data.get('last_topic')
 
     def has_word(word):
         return bool(re.search(rf"\b{re.escape(word)}\b", text_lower))
@@ -275,15 +281,16 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"👋 Nice to meet you, **{new_name}**! I'll remember that. Ask me 'What's my name' anytime!", parse_mode='Markdown')
 
     elif "what is my name" in text_lower or "what's my name" in text_lower:
-        saved_name = context.user_data.get('custom_name', update.effective_user.first_name)
+        saved_name = get_user_display_name(update, context)
         await update.message.reply_text(f"👤 Your name is **{saved_name}**! It's a pleasure to assist you.", parse_mode='Markdown')
 
     elif "who are you" in text_lower or "your name" in text_lower:
         await update.message.reply_text("🤖 I am **Harper**, your premium AI assistant, running live on Railway! 🚀", parse_mode='Markdown')
 
     elif any(k in text_lower for k in ["what do you do", "what can you do", "help", "capabilities", "commands", "how do you work"]):
+        context.user_data['last_topic'] = 'help'
         await update.message.reply_text(
-            f"🤖 *Here's what I can do, {update.effective_user.first_name}:*\n\n"
+            f"🤖 *Here's what I can do, {user_name}:*\n\n"
             "📰 **Blockchain News** — Type *'news'* for live headlines\n"
             "💰 **Live Crypto Prices** — Type *'prices'* for BTC, ETH, SOL & more\n"
             "📊 **Market Stats** — Tap *Market Stats* in the menu\n"
@@ -294,7 +301,26 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
 
+    elif any(phrase in text_lower for phrase in ["how are you", "how's it going", "how are u", "how r you", "how r u"]):
+        responses = [
+            f"I'm doing great here in the cloud, {user_name}! 😊 What are you up to in crypto today?",
+            f"I'm feeling bullish today, {user_name} 🚀 How about you?",
+            f"Running smooth on the blockchain rails! Thanks for asking, {user_name}. What can I help you with right now?"
+        ]
+        context.user_data['last_topic'] = 'smalltalk'
+        await update.message.reply_text(random.choice(responses), parse_mode='Markdown')
+
+    elif any(word in text_lower for word in ["sad", "upset", "tired", "lonely", "stressed", "depressed", "bored"]):
+        responses = [
+            f"Sorry to hear that, {user_name}. 😔 Want to talk about it, or should I distract you with some crypto news or a game?",
+            f"That doesn't sound fun, {user_name}. I'm here for you. We can chat, check *news*, or roll a *dice* game together.",
+            f"I've got your back, {user_name}. 💙 Tell me what's going on, or type *news* or *game* if you just want a distraction."
+        ]
+        context.user_data['last_topic'] = 'mood'
+        await update.message.reply_text(random.choice(responses), parse_mode='Markdown')
+
     elif any(has_word(k) for k in ["news", "blockchain", "headlines"]):
+        context.user_data['last_topic'] = 'news'
         news = await fetch_blockchain_news()
         await update.message.reply_text("🔎 Fetching the latest blocks...")
         await asyncio.sleep(1)
@@ -304,41 +330,49 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(news_text, parse_mode='Markdown')
 
     elif any(has_word(k) for k in ["price", "crypto", "market", "ticker"]):
+        context.user_data['last_topic'] = 'prices'
         await update.message.reply_text("💹 Loading live market data...")
         prices = await fetch_crypto_prices()
         await update.message.reply_text(prices, parse_mode='Markdown')
 
     elif any(has_word(k) for k in ["game", "play", "lucky", "dice"]):
+        context.user_data['last_topic'] = 'game'
         await update.message.reply_text("Feeling lucky? Choose your game:")
         await update.message.reply_dice(emoji="🎰")
 
     elif any(has_word(k) for k in ["poll", "vote", "daily"]):
+        context.user_data['last_topic'] = 'poll'
         questions = ["Which chain is better?", "HODL or Trade?", "Is Web3 the future?"]
         options = [["Solana", "Ethereum", "Bitcoin"], ["HODL 💎", "Trade 📉"], ["Yes! ✅", "Not sure 🧐"]]
         idx = random.randint(0, len(questions)-1)
         await context.bot.send_poll(update.effective_chat.id, questions[idx], options[idx], is_anonymous=False)
 
     elif any(has_word(k) for k in ["hello", "hi", "hey", "greet", "sup", "yo"]):
-        await update.message.reply_text(f"Hello {update.effective_user.first_name}! Ready to explore the blockchain? 🚀")
+        context.user_data['last_topic'] = 'greeting'
+        await update.message.reply_text(f"Hello {user_name}! Ready to explore the blockchain? 🚀")
 
     elif any(has_word(k) for k in ["yes", "yeah", "yep", "sure", "ok", "okay", "alright", "yup", "nope", "no", "nah", "thanks", "thank", "cool", "great", "nice"]):
+        context.user_data['last_topic'] = 'ack'
         responses = [
-            f"Got it, {update.effective_user.first_name}! 😊 What would you like to explore? Try **news**, **prices**, or ask me anything!",
-            f"Awesome! 🚀 Type **'prices'** to see live crypto rates or **'news'** for the latest headlines!",
+            f"Got it, {user_name}! 😊 What would you like to explore next? Try **news**, **prices**, or ask me anything!",
+            f"Awesome, {user_name}! 🚀 Type **'prices'** to see live crypto rates or **'news'** for the latest headlines!",
             f"Roger that! 👍 Ask me about **Bitcoin**, **Ethereum**, or type **'help'** to see all I can do!",
         ]
         await update.message.reply_text(random.choice(responses), parse_mode='Markdown')
 
     elif any(has_word(k) for k in ["joke"]):
+        context.user_data['last_topic'] = 'joke'
         jokes = ["Why did the crypto trader cross the road? To get to the other side of the pump!", "Blockchain is like a relationship: once it's committed, you can't change the history."]
         await update.message.reply_text(random.choice(jokes))
 
     elif has_word("time"):
+        context.user_data['last_topic'] = 'time'
         from datetime import datetime
         now = datetime.now().strftime("%H:%M:%S")
         await update.message.reply_text(f"🕒 The current server time is: **{now}**", parse_mode='Markdown')
 
     elif has_word("opencl"):
+        context.user_data['last_topic'] = 'opencl'
         await update.message.reply_text(
             "🦞 *OpenClaw Features*\n\n"
             "OpenClaw is an advanced automation framework. Features include:\n"
@@ -352,14 +386,43 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Match via alias → resolve to canonical knowledge key
         for alias, canonical in crypto_aliases.items():
             if alias in text_lower and canonical in knowledge:
+                context.user_data['last_topic'] = 'knowledge'
                 await update.message.reply_text(f"📚 *Harper Knowledge:*\n\n{knowledge[canonical]}", parse_mode='Markdown')
                 break
 
     elif any(key in text_lower for key in knowledge):
         for key, info in knowledge.items():
             if key in text_lower:
+                context.user_data['last_topic'] = 'knowledge'
                 await update.message.reply_text(f"📚 *Harper Knowledge:*\n\n{info}", parse_mode='Markdown')
                 break
+
+    elif any(phrase in text_lower for phrase in ["tell me more", "go on", "continue", "what else"]):
+        if last_topic == 'news':
+            await update.message.reply_text(
+                "📰 Want deeper news? Try asking about a specific project like *Bitcoin news* or *Solana news* and I'll look that up.",
+                parse_mode='Markdown'
+            )
+        elif last_topic == 'prices':
+            await update.message.reply_text(
+                "💰 If you tell me which coins you care about most, I can focus on those whenever you ask for prices.",
+                parse_mode='Markdown'
+            )
+        elif last_topic == 'knowledge':
+            await update.message.reply_text(
+                "📚 I can go deeper on any project you like. Just say something like *Tell me more about Ethereum*.",
+                parse_mode='Markdown'
+            )
+        elif last_topic in ("smalltalk", "mood"):
+            await update.message.reply_text(
+                f"🗣 I'm here to chat, {user_name}. Tell me what's on your mind, or type *news* or *game* if you want a distraction.",
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(
+                "I'm happy to keep going! Ask me about *news*, *prices*, or any crypto topic you're curious about.",
+                parse_mode='Markdown'
+            )
 
     else:
         # Only do internet search for meaningful queries (length > 3 chars)
@@ -375,8 +438,10 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         search_results = await search_internet(text)
 
         if search_results:
+            context.user_data['last_topic'] = 'search'
             await update.message.reply_text(search_results, parse_mode='Markdown')
         else:
+            context.user_data['last_topic'] = 'fallback'
             await update.message.reply_text(
                 f"🎯 *Harper v3.7*\n\nI couldn't find info on _{text}_ right now.\n\n"
                 "Try asking about **prices**, **news**, or specific crypto like **Solana**!",
