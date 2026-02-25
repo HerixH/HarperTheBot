@@ -238,10 +238,20 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles both menu buttons AND flexible keyword detection."""
     import re
     text = update.message.text
-    text_lower = text.lower()
+    text_lower = text.lower().strip()
 
     def has_word(word):
         return bool(re.search(rf"\b{re.escape(word)}\b", text_lower))
+
+    # --- Crypto aliases & typo map (maps input → canonical knowledge key) ---
+    crypto_aliases = {
+        "eth": "ethereum", "etherum": "ethereum", "etherium": "ethereum", "ether": "ethereum",
+        "btc": "bitcoin", "bitcon": "bitcoin", "bitcoins": "bitcoin",
+        "sol": "solana", "slana": "solana",
+        "bnb": "binance", "binance": "binance",
+        "xrp": "ripple", "ripple": "ripple",
+        "ada": "cardano", "cardano": "cardano",
+    }
 
     # --- Knowledge Base ---
     knowledge = {
@@ -251,6 +261,9 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "solana": "⚡ **Solana (SOL)** is a high-speed, high-performance blockchain known for its fast transactions and low costs.",
         "ethereum": "🌐 **Ethereum (ETH)** is the world's leading smart-contract platform, powering DeFi, NFTs, and decentralized apps.",
         "bitcoin": "🥇 **Bitcoin (BTC)** is the first and most secure cryptocurrency, often regarded as 'Digital Gold'.",
+        "ripple": "💧 **XRP (Ripple)** is a digital payment protocol focused on fast, low-cost international money transfers.",
+        "cardano": "🔵 **Cardano (ADA)** is a proof-of-stake blockchain built for sustainability and smart contracts.",
+        "binance": "🔶 **BNB (Binance Coin)** is the native token of the Binance ecosystem, one of the largest crypto exchanges.",
         "harper": "🤖 That's me! I'm **Harper**, your AI Blockchain Assistant. I'm here to help you navigate the world of decentralized finance!",
     }
 
@@ -267,6 +280,19 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif "who are you" in text_lower or "your name" in text_lower:
         await update.message.reply_text("🤖 I am **Harper**, your premium AI assistant, running live on Railway! 🚀", parse_mode='Markdown')
+
+    elif any(k in text_lower for k in ["what do you do", "what can you do", "help", "capabilities", "commands", "how do you work"]):
+        await update.message.reply_text(
+            f"🤖 *Here's what I can do, {update.effective_user.first_name}:*\n\n"
+            "📰 **Blockchain News** — Type *'news'* for live headlines\n"
+            "💰 **Live Crypto Prices** — Type *'prices'* for BTC, ETH, SOL & more\n"
+            "📊 **Market Stats** — Tap *Market Stats* in the menu\n"
+            "🎲 **Games** — Type *'dice'* or *'game'*\n"
+            "📚 **Crypto Knowledge** — Ask about Bitcoin, Ethereum, Solana, Vitalik...\n"
+            "🌐 **Internet Search** — Ask me anything else and I'll search the web!\n\n"
+            "_Tap /start to open the full menu!_",
+            parse_mode='Markdown'
+        )
 
     elif any(has_word(k) for k in ["news", "blockchain", "headlines"]):
         news = await fetch_blockchain_news()
@@ -298,8 +324,8 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif any(has_word(k) for k in ["yes", "yeah", "yep", "sure", "ok", "okay", "alright", "yup", "nope", "no", "nah", "thanks", "thank", "cool", "great", "nice"]):
         responses = [
             f"Got it, {update.effective_user.first_name}! 😊 What would you like to explore? Try **news**, **prices**, or ask me anything!",
-            f"Awesome! 🚀 Use the menu below or type **'prices'** to see live crypto rates!",
-            f"Roger that! 👍 What's on your mind? Try asking about **Bitcoin**, **Ethereum**, or **news**!",
+            f"Awesome! 🚀 Type **'prices'** to see live crypto rates or **'news'** for the latest headlines!",
+            f"Roger that! 👍 Ask me about **Bitcoin**, **Ethereum**, or type **'help'** to see all I can do!",
         ]
         await update.message.reply_text(random.choice(responses), parse_mode='Markdown')
 
@@ -322,10 +348,17 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
 
+    elif any(alias in text_lower for alias in crypto_aliases):
+        # Match via alias → resolve to canonical knowledge key
+        for alias, canonical in crypto_aliases.items():
+            if alias in text_lower and canonical in knowledge:
+                await update.message.reply_text(f"📚 *Harper Knowledge:*\n\n{knowledge[canonical]}", parse_mode='Markdown')
+                break
+
     elif any(key in text_lower for key in knowledge):
         for key, info in knowledge.items():
             if key in text_lower:
-                await update.message.reply_text(f"📚 *Harper Knowledge:* \n\n{info}", parse_mode='Markdown')
+                await update.message.reply_text(f"📚 *Harper Knowledge:*\n\n{info}", parse_mode='Markdown')
                 break
 
     else:
