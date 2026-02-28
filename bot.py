@@ -25,7 +25,7 @@ def get_user_display_name(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     return custom if custom else update.effective_user.first_name
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    \"\"\"Sends a greeting with a premium banner and a refined menu layout.\"\"\"
+    """Sends a greeting with a premium banner and a refined menu layout."""
     user = update.effective_user
     user_name = get_user_display_name(update, context)
     
@@ -34,9 +34,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Refined Keyboard Layout - Grouped for better UX
     reply_keyboard = [
-        ['� Latest News', '� Market Prices'],
-        ['🕹 Play Games', '� Daily Poll'],
-        ['� My Profile', '⚙️ Bot Settings']
+        ['🗞 Latest News', '📈 Market Prices'],
+        ['🕹 Play Games', '🗳 Daily Poll'],
+        ['👤 My Profile', '⚙️ Bot Settings']
     ]
     markup = ReplyKeyboardMarkup(
         reply_keyboard, 
@@ -44,17 +44,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         input_field_placeholder="Explore the blockchain hub..."
     )
 
-    inline_keyboard = [
-        [
-            InlineKeyboardButton("� Headlines", callback_data='news'),
-            InlineKeyboardButton("📊 Analytics", callback_data='stats'),
-        ],
-        [InlineKeyboardButton("� Lucky Roll", callback_data='surprise')],
-        [InlineKeyboardButton("� GitHub Project", url='https://github.com/HerixH/HarperTheBot')],
-    ]
-    inline_markup = InlineKeyboardMarkup(inline_keyboard)
-
-    # 1. Send the Premium Banner
+    # 1. Send the Premium Banner as the single point of entry
     if os.path.exists(banner_path):
         await update.message.reply_photo(
             photo=open(banner_path, 'rb'),
@@ -75,13 +65,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=markup,
             parse_mode='Markdown'
         )
-    
-    # 2. Add the Dashboard as a secondary message
-    await update.message.reply_text(
-        "✨ *Live Market Dashboard:*",
-        reply_markup=inline_markup,
-        parse_mode='Markdown'
-    )
 
 async def blockchain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Direct command to open the blockchain menu."""
@@ -246,10 +229,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == 'back_to_start':
         inline_keyboard = [
             [
-                InlineKeyboardButton("� Headlines", callback_data='news'),
+                InlineKeyboardButton("🗞 Headlines", callback_data='news'),
                 InlineKeyboardButton("📊 Analytics", callback_data='stats'),
             ],
-            [InlineKeyboardButton("� Lucky Roll", callback_data='surprise')],
+            [InlineKeyboardButton("🎲 Lucky Roll", callback_data='surprise')],
             [InlineKeyboardButton("💎 GitHub Project", url='https://github.com/HerixH/HarperTheBot')],
         ]
         await query.edit_message_text(
@@ -537,6 +520,5 @@ if __name__ == '__main__':
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_replies))
     
-    print("Harper v3.6 is live with Personalized Features & Knowledge Base!")
+    print("Harper v3.8 is live with Personalized Features & Knowledge Base!")
     application.run_polling()
-
