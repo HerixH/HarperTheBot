@@ -29,10 +29,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_name = get_user_display_name(update, context)
     
-    # Path to the premium banner we generated
-    banner_path = r'C:\Users\User\.gemini\antigravity\brain\119c2985-4be6-4a98-9d62-4c8695e691a1\harper_bot_banner_1772269612755.png'
+    # Path is now relative to the project root for cross-platform deployment
+    banner_path = os.path.join(os.path.dirname(__file__), "banner.png")
     
-    # Refined Keyboard Layout - Grouped for better UX
+    # Refined Keyboard Layout (Everyone version)
     reply_keyboard = [
         ['🗞 Latest News', '📈 Market Prices'],
         ['🕹 Play Games', '🗳 Daily Poll'],
@@ -346,7 +346,6 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif any(has_word(k) for k in ["news", "blockchain", "headlines"]):
         context.user_data['last_topic'] = 'news'
-        await update.message.reply_text("🔎 Fetching the latest blocks...")
         news = await fetch_blockchain_news()
         await asyncio.sleep(1)
         news_text = "🗞 *Harper Blockchain Feed*\n\n"
@@ -356,7 +355,6 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif any(has_word(k) for k in ["price", "prices", "crypto", "market", "ticker"]):
         context.user_data['last_topic'] = 'prices'
-        await update.message.reply_text("💹 Loading live market data...")
         prices = await fetch_crypto_prices()
         await update.message.reply_text(prices, parse_mode='Markdown')
 
@@ -374,10 +372,14 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif has_word("profile") or any(has_word(k) for k in ["hello", "hi", "hey", "sup", "yo"]):
         context.user_data['last_topic'] = 'profile'
+        raw_id = str(update.effective_user.id)
+        # Masking the middle for "Screenshot Privacy"
+        masked_id = f"{raw_id[:3]}****{raw_id[-2:]}" if len(raw_id) > 5 else raw_id
+        
         await update.message.reply_text(
             f"👤 *Member Profile: {user_name}*\n\n"
             f"• **Display Name:** {user_name}\n"
-            f"• **Telegram ID:** `{update.effective_user.id}`\n"
+            f"• **Telegram ID:** `{masked_id}`\n"
             f"• **Status:** Premium Member 💎\n"
             "• **Activity:** Exploring Blockchain\n\n"
             "_You can change your name by saying 'My name is [name]'_",
