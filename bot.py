@@ -25,41 +25,60 @@ def get_user_display_name(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     return custom if custom else update.effective_user.first_name
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Sends a greeting with the highly visible Blockchain menu."""
+    \"\"\"Sends a greeting with a premium banner and a refined menu layout.\"\"\"
     user = update.effective_user
+    user_name = get_user_display_name(update, context)
     
-    # Force keyboard to be visible and add a placeholder
+    # Path to the premium banner we generated
+    banner_path = r'C:\Users\User\.gemini\antigravity\brain\119c2985-4be6-4a98-9d62-4c8695e691a1\harper_bot_banner_1772269612755.png'
+    
+    # Refined Keyboard Layout - Grouped for better UX
     reply_keyboard = [
-        ['🔗 Blockchain News', '💰 Crypto Prices'],
-        ['🎮 Play Games', '📊 Daily Poll'],
-        ['👋 Say Hello', '⚙️ Settings']
+        ['� Latest News', '� Market Prices'],
+        ['🕹 Play Games', '� Daily Poll'],
+        ['� My Profile', '⚙️ Bot Settings']
     ]
     markup = ReplyKeyboardMarkup(
         reply_keyboard, 
         resize_keyboard=True, 
-        input_field_placeholder="Select a blockchain feature..."
+        input_field_placeholder="Explore the blockchain hub..."
     )
 
     inline_keyboard = [
         [
-            InlineKeyboardButton("📰 Latest News", callback_data='news'),
-            InlineKeyboardButton("📊 Market Stats", callback_data='stats'),
+            InlineKeyboardButton("� Headlines", callback_data='news'),
+            InlineKeyboardButton("📊 Analytics", callback_data='stats'),
         ],
-        [InlineKeyboardButton("🎉 Ultimate Surprise", callback_data='surprise')],
-        [InlineKeyboardButton("🔗 GitHub Repo", url='https://github.com/HerixH/HarperTheBot')],
+        [InlineKeyboardButton("� Lucky Roll", callback_data='surprise')],
+        [InlineKeyboardButton("� GitHub Project", url='https://github.com/HerixH/HarperTheBot')],
     ]
     inline_markup = InlineKeyboardMarkup(inline_keyboard)
 
-    await update.message.reply_text(
-        f"🏆 *Welcome to Harper v3.6, {user.first_name}!*\n\n"
-        "Your **Blockchain Assistant** is ready. 🌐\n\n"
-        "Buttons should now appear at the bottom of your screen. If not, tap the [::] icon in your chat bar!",
-        reply_markup=markup,
-        parse_mode='Markdown'
-    )
+    # 1. Send the Premium Banner
+    if os.path.exists(banner_path):
+        await update.message.reply_photo(
+            photo=open(banner_path, 'rb'),
+            caption=(
+                f"💎 *Welcome to Harper v3.8, {user_name}!* 💎\n\n"
+                "I am your premium **AI Blockchain Assistant**, designed for speed, precision, and market insight. 🌐\n\n"
+                "Use the menu below to navigate or ask me anything directly."
+            ),
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
+    else:
+        # Fallback if image isn't found
+        await update.message.reply_text(
+            f"🏆 *Welcome to Harper v3.8, {user_name}!*\n\n"
+            "Your **Blockchain Assistant** is ready. 🌐\n\n"
+            "The premium hub is now active. Explore below!",
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
     
+    # 2. Add the Dashboard as a secondary message
     await update.message.reply_text(
-        "✨ *Market Dashboard:*",
+        "✨ *Live Market Dashboard:*",
         reply_markup=inline_markup,
         parse_mode='Markdown'
     )
@@ -227,15 +246,38 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == 'back_to_start':
         inline_keyboard = [
             [
-                InlineKeyboardButton("📰 Latest News", callback_data='news'),
-                InlineKeyboardButton("📊 Market Stats", callback_data='stats'),
+                InlineKeyboardButton("� Headlines", callback_data='news'),
+                InlineKeyboardButton("📊 Analytics", callback_data='stats'),
             ],
-            [InlineKeyboardButton("🎉 Ultimate Surprise", callback_data='surprise')],
-            [InlineKeyboardButton("💎 Support Repository", url='https://github.com/HerixH/HarperTheBot')],
+            [InlineKeyboardButton("� Lucky Roll", callback_data='surprise')],
+            [InlineKeyboardButton("💎 GitHub Project", url='https://github.com/HerixH/HarperTheBot')],
         ]
         await query.edit_message_text(
-            text="Main Menu Refreshed! ✨\n\nChoose an action:",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard)
+            text="*Main Menu Refreshed!* ✨\n\nChoose an action:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard),
+            parse_mode='Markdown'
+        )
+    
+    # --- Settings Callbacks ---
+    elif query.data == 'rename_flow':
+        await query.edit_message_text(
+            text="✏️ *How to Rename*\n\nTo change your display name, simply type:\n`My name is [your name]`\n\nExample: `My name is Satoshi`",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data='back_to_start')]]),
+            parse_mode='Markdown'
+        )
+    elif query.data == 'alerts_soon':
+        await query.answer("🔔 Feature in development!")
+        await query.edit_message_text(
+            text="🚀 *Price Alerts*\n\nThis feature is coming in v4.0. You'll be able to set custom price triggers for BTC, ETH, and more!",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data='back_to_start')]]),
+            parse_mode='Markdown'
+        )
+    elif query.data == 'reset_data':
+        context.user_data.clear()
+        await query.answer("🗑 Data cleared!")
+        await query.edit_message_text(
+            text="✅ *Data Reset*\n\nYour preferences and custom name have been cleared. Type /start to begin fresh!",
+            parse_mode='Markdown'
         )
 
 async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -321,35 +363,56 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif any(has_word(k) for k in ["news", "blockchain", "headlines"]):
         context.user_data['last_topic'] = 'news'
-        news = await fetch_blockchain_news()
         await update.message.reply_text("🔎 Fetching the latest blocks...")
+        news = await fetch_blockchain_news()
         await asyncio.sleep(1)
         news_text = "🗞 *Harper Blockchain Feed*\n\n"
         for item in news:
             news_text += f"🔥 *{item['t']}*\n_{item['d']}_\n\n"
         await update.message.reply_text(news_text, parse_mode='Markdown')
 
-    elif any(has_word(k) for k in ["price", "crypto", "market", "ticker"]):
+    elif any(has_word(k) for k in ["price", "prices", "crypto", "market", "ticker"]):
         context.user_data['last_topic'] = 'prices'
         await update.message.reply_text("💹 Loading live market data...")
         prices = await fetch_crypto_prices()
         await update.message.reply_text(prices, parse_mode='Markdown')
 
-    elif any(has_word(k) for k in ["game", "play", "lucky", "dice"]):
+    elif any(has_word(k) for k in ["game", "games", "play", "lucky", "dice"]):
         context.user_data['last_topic'] = 'game'
-        await update.message.reply_text("Feeling lucky? Choose your game:")
+        await update.message.reply_text(f"🕹 *Game Hub (v3.8)*\n\nReady to test your luck, {user_name}?", parse_mode='Markdown')
         await update.message.reply_dice(emoji="🎰")
 
     elif any(has_word(k) for k in ["poll", "vote", "daily"]):
         context.user_data['last_topic'] = 'poll'
-        questions = ["Which chain is better?", "HODL or Trade?", "Is Web3 the future?"]
-        options = [["Solana", "Ethereum", "Bitcoin"], ["HODL 💎", "Trade 📉"], ["Yes! ✅", "Not sure 🧐"]]
+        questions = ["Which chain is better?", "HODL or Trade?", "Is Web3 the future?", "Best layer 2?"]
+        options = [["Solana", "Ethereum", "Bitcoin"], ["HODL 💎", "Trade 📉"], ["Yes! ✅", "Not sure 🧐"], ["Base 🔵", "Arbitrum 🛡", "Optimism 🔴"]]
         idx = random.randint(0, len(questions)-1)
         await context.bot.send_poll(update.effective_chat.id, questions[idx], options[idx], is_anonymous=False)
 
-    elif any(has_word(k) for k in ["hello", "hi", "hey", "greet", "sup", "yo"]):
-        context.user_data['last_topic'] = 'greeting'
-        await update.message.reply_text(f"Hello {user_name}! Ready to explore the blockchain? 🚀")
+    elif has_word("profile") or any(has_word(k) for k in ["hello", "hi", "hey", "sup", "yo"]):
+        context.user_data['last_topic'] = 'profile'
+        await update.message.reply_text(
+            f"👤 *Member Profile: {user_name}*\n\n"
+            f"• **Display Name:** {user_name}\n"
+            f"• **Telegram ID:** `{update.effective_user.id}`\n"
+            f"• **Status:** Premium Member 💎\n"
+            "• **Activity:** Exploring Blockchain\n\n"
+            "_You can change your name by saying 'My name is [name]'_",
+            parse_mode='Markdown'
+        )
+
+    elif has_word("settings") or has_word("config"):
+        context.user_data['last_topic'] = 'settings'
+        settings_kb = [
+            [InlineKeyboardButton("✏️ Rename Me", callback_data='rename_flow')],
+            [InlineKeyboardButton("🔔 Alerts (Coming Soon)", callback_data='alerts_soon')],
+            [InlineKeyboardButton("🗑 Reset Data", callback_data='reset_data')],
+        ]
+        await update.message.reply_text(
+            "⚙️ *Bot Settings*\n\nCustomize your Harper experience below:",
+            reply_markup=InlineKeyboardMarkup(settings_kb),
+            parse_mode='Markdown'
+        )
 
     elif any(has_word(k) for k in ["yes", "yeah", "yep", "sure", "ok", "okay", "alright", "yup", "nope", "no", "nah", "thanks", "thank", "cool", "great", "nice"]):
         context.user_data['last_topic'] = 'ack'
