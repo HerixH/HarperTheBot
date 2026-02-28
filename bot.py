@@ -248,13 +248,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data='back_to_start')]]),
             parse_mode='Markdown'
         )
-    elif query.data == 'alerts_soon':
-        await query.answer("🔔 Feature in development!")
-        await query.edit_message_text(
-            text="🚀 *Price Alerts*\n\nThis feature is coming in v4.0. You'll be able to set custom price triggers for BTC, ETH, and more!",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data='back_to_start')]]),
-            parse_mode='Markdown'
-        )
     elif query.data == 'reset_data':
         context.user_data.clear()
         await query.answer("🗑 Data cleared!")
@@ -390,7 +383,6 @@ async def handle_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['last_topic'] = 'settings'
         settings_kb = [
             [InlineKeyboardButton("✏️ Rename Me", callback_data='rename_flow')],
-            [InlineKeyboardButton("🔔 Alerts (Coming Soon)", callback_data='alerts_soon')],
             [InlineKeyboardButton("🗑 Reset Data", callback_data='reset_data')],
         ]
         await update.message.reply_text(
